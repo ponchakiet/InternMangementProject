@@ -1,0 +1,96 @@
+package org.example.internmanagement.controller;
+
+import lombok.RequiredArgsConstructor;
+import org.example.internmanagement.dto.request.EvaluationCriterionRequestDTO;
+import org.example.internmanagement.dto.request.EvaluationCriterionUpdateDTO;
+import org.example.internmanagement.dto.response.EvaluationCriterionResponseDTO;
+import org.example.internmanagement.entity.User;
+import org.example.internmanagement.service.EvaluationCriterionService;
+import org.example.internmanagement.service.UserService;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.core.userdetails.UserDetails;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.web.bind.annotation.*;
+
+import org.example.internmanagement.dto.response.PagedData;
+import org.example.internmanagement.dto.response.Response;
+import java.time.LocalDateTime;
+
+@RestController
+@RequestMapping("/api/evaluation-criteria")
+@RequiredArgsConstructor
+public class EvaluationCriterionController {
+
+    private final EvaluationCriterionService evaluationCriterionService;
+    private final UserService userService;
+
+    @GetMapping
+    public ResponseEntity<Response<PagedData<EvaluationCriterionResponseDTO>>> getAllCriteria(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size,
+            @AuthenticationPrincipal UserDetails userDetails) {
+        User currentUser = userService.getCurrentUser(userDetails);
+        return ResponseEntity.ok(Response.<PagedData<EvaluationCriterionResponseDTO>>builder()
+                .success(true)
+                .message("Evaluation criteria fetched successfully")
+                .data(PagedData.from(evaluationCriterionService.getAllCriteria(currentUser, PageRequest.of(page, size))))
+                .timestamp(LocalDateTime.now())
+                .build());
+    }
+
+    @GetMapping("/{criterion-id}")
+    public ResponseEntity<Response<EvaluationCriterionResponseDTO>> getCriterionById(
+            @PathVariable("criterion-id") Integer criterionId,
+            @AuthenticationPrincipal UserDetails userDetails) {
+        User currentUser = userService.getCurrentUser(userDetails);
+        return ResponseEntity.ok(Response.<EvaluationCriterionResponseDTO>builder()
+                .success(true)
+                .message("Evaluation criterion fetched successfully")
+                .data(evaluationCriterionService.getCriterionById(criterionId, currentUser))
+                .timestamp(LocalDateTime.now())
+                .build());
+    }
+
+    @PostMapping
+    public ResponseEntity<Response<EvaluationCriterionResponseDTO>> createCriterion(
+            @RequestBody EvaluationCriterionRequestDTO request,
+            @AuthenticationPrincipal UserDetails userDetails) {
+        User currentUser = userService.getCurrentUser(userDetails);
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(Response.<EvaluationCriterionResponseDTO>builder()
+                        .success(true)
+                        .message("Evaluation criterion created successfully")
+                        .data(evaluationCriterionService.createCriterion(request, currentUser))
+                        .timestamp(LocalDateTime.now())
+                        .build());
+    }
+
+    @PutMapping("/{criterion-id}")
+    public ResponseEntity<Response<EvaluationCriterionResponseDTO>> updateCriterion(
+            @PathVariable("criterion-id") Integer criterionId,
+            @RequestBody EvaluationCriterionUpdateDTO request,
+            @AuthenticationPrincipal UserDetails userDetails) {
+        User currentUser = userService.getCurrentUser(userDetails);
+        return ResponseEntity.ok(Response.<EvaluationCriterionResponseDTO>builder()
+                .success(true)
+                .message("Evaluation criterion updated successfully")
+                .data(evaluationCriterionService.updateCriterion(criterionId, request, currentUser))
+                .timestamp(LocalDateTime.now())
+                .build());
+    }
+
+    @DeleteMapping("/{criterion-id}")
+    public ResponseEntity<Response<Void>> deleteCriterion(
+            @PathVariable("criterion-id") Integer criterionId,
+            @AuthenticationPrincipal UserDetails userDetails) {
+        User currentUser = userService.getCurrentUser(userDetails);
+        evaluationCriterionService.deleteCriterion(criterionId, currentUser);
+        return ResponseEntity.ok(Response.<Void>builder()
+                .success(true)
+                .message("Evaluation criterion deleted successfully")
+                .timestamp(LocalDateTime.now())
+                .build());
+    }
+}

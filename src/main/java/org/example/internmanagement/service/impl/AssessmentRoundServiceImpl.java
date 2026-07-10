@@ -1,0 +1,179 @@
+package org.example.internmanagement.service.impl;
+
+import lombok.RequiredArgsConstructor;
+import org.example.internmanagement.dto.request.AssessmentRoundRequestDTO;
+import org.example.internmanagement.dto.request.AssessmentRoundUpdateDTO;
+import org.example.internmanagement.dto.request.RoundCriterionRequestDTO;
+import org.example.internmanagement.dto.response.AssessmentRoundResponseDTO;
+import org.example.internmanagement.dto.response.RoundCriterionResponseDTO;
+import org.example.internmanagement.entity.*;
+import org.example.internmanagement.exception.DuplicateResourceException;
+import org.example.internmanagement.exception.ResourceNotFoundException;
+import org.example.internmanagement.mapper.AssessmentRoundMapper;
+import org.example.internmanagement.mapper.RoundCriterionMapper;
+import org.example.internmanagement.repository.*;
+import org.example.internmanagement.service.AssessmentRoundService;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+
+import java.util.List;
+import java.util.stream.Collectors;
+
+@Service
+@RequiredArgsConstructor
+public class AssessmentRoundServiceImpl implements AssessmentRoundService {
+
+    private final AssessmentRoundRepository assessmentRoundRepository;
+    private final RoundCriterionRepository roundCriterionRepository;
+    private final InternshipPhaseRepository internshipPhaseRepository;
+    private final EvaluationCriterionRepository evaluationCriterionRepository;
+    private final AssessmentRoundMapper assessmentRoundMapper;
+    private final RoundCriterionMapper roundCriterionMapper;
+
+    private AssessmentRoundResponseDTO mapToResponseDTO(AssessmentRound round) {
+        List<RoundCriterion> criteria = roundCriterionRepository.findByRound_RoundId(round.getRoundId());
+        List<RoundCriterionResponseDTO> criteriaDTOs = criteria.stream()
+                .map(roundCriterionMapper::toDto)
+                .collect(Collectors.toList());
+        AssessmentRoundResponseDTO dto = assessmentRoundMapper.toDto(round);
+        dto.setCriteria(criteriaDTOs);
+        return dto;
+    }
+
+    @Override
+    public Page<AssessmentRoundResponseDTO> getAllRounds(Integer phaseId, User user, Pageable pageable) {
+        if (user.getRole() != User.Role.ADMIN && user.getRole() != User.Role.MENTOR && user.getRole() != User.Role.STUDENT) {
+            throw new ResourceNotFoundException("Access denied");
+        }
+
+        Page<AssessmentRound> roundPage;
+        if (phaseId != null) {
+            roundPage = assessmentRoundRepository.findByPhase_PhaseId(phaseId, pageable);
+        } else {
+            roundPage = assessmentRoundRepository.findAll(pageable);
+        }
+
+        return roundPage.map(this::mapToResponseDTO);
+    }
+
+    @Override
+    public AssessmentRoundResponseDTO getRoundById(Integer roundId, User user) {
+        if (user.getRole() != User.Role.ADMIN && user.getRole() != User.Role.MENTOR && user.getRole() != User.Role.STUDENT) {
+            throw new ResourceNotFoundException("Access denied");
+        }
+
+        AssessmentRound round = assessmentRoundRepository.findById(roundId)
+                .orElseThrow(() -> new ResourceNotFoundException("Assessment round not found with id: " + roundId));
+
+        return mapToResponseDTO(round);
+    }
+
+    @Override
+    @Transactional
+    public AssessmentRoundResponseDTO createRound(AssessmentRoundRequestDTO request, User user) {
+        if (user.getRole() != User.Role.ADMIN) {
+            throw new ResourceNotFoundException("Access denied");
+        }
+
+        InternshipPhase phase = internshipPhaseRepository.findById(request.getPhaseId())
+                .orElseThrow(() -> new ResourceNotFoundException("Phase not found with id: " + request.getPhaseId()));
+
+        if (assessmentRoundRepository.existsByRoundNameAndPhase_PhaseId(request.getRoundName(), phase.getPhaseId())) {
+            throw new DuplicateResourceException("Round name already exists in this phase");
+        }
+
+        AssessmentRound round = assessmentRoundMapper.toEntity(request);
+        round.setPhase(phase);
+        if (request.getIsActive() != null) {
+            round.setIsActive(request.getIsActive());
+        }
+
+        AssessmentRound savedRound = assessmentRoundRepository.save(round);
+
+        if (request.getCriteria() != null && !request.getCriteria().isEmpty()) {
+            for (RoundCriterionRequestDTO criterionRequest : request.getCriteria()) {
+                EvaluationCriterion criterion = evaluationCriterionRepository.findById(criterionRequest.getCriterionId())
+                        .orElseThrow(() -> new ResourceNotFoundException("Evaluation criterion not found with id: " + criterionRequest.getCriterionId()));
+                
+                RoundCriterion roundCriterion = new RoundCriterion();
+                roundCriterion.setRound(savedRound);
+                roundCriterion.setCriterion(criterion);
+                roundCriterion.setWeight(criterionRequest.getWeight());
+                roundCriterionRepository.save(roundCriterion);
+            }
+        }
+
+        return mapToResponseDTO(savedRound);
+    }
+
+    @Override
+    @Transactional
+    public AssessmentRoundResponseDTO updateRound(Integer roundId, AssessmentRoundUpdateDTO request, User user) {
+        if (user.getRole() != User.Role.ADMIN) {
+            throw new ResourceNotFoundException("Access denied");
+        }
+
+        AssessmentRound round = assessmentRoundRepository.findById(roundId)
+                .orElseThrow(() -> new ResourceNotFoundException("Assessment round not found with id: " + roundId));
+
+        if (request.getPhaseId() != null) {
+            InternshipPhase phase = internshipPhaseRepository.findById(request.getPhaseId())
+                    .orElseThrow(() -> new ResourceNotFoundException("Phase not found with id: " + request.getPhaseId()));
+            
+            String newName = request.getRoundName() != null ? request.getRoundName() : round.getRoundName();
+            if (!round.getRoundName().equals(newName) || !round.getPhase().getPhaseId().equals(request.getPhaseId())) {
+                if (assessmentRoundRepository.existsByRoundNameAndPhase_PhaseId(newName, phase.getPhaseId())) {
+                    throw new DuplicateResourceException("Round name already exists in this phase");
+                }
+            }
+            round.setPhase(phase);
+        } else if (request.getRoundName() != null) {
+            if (!round.getRoundName().equals(request.getRoundName()) &&
+                    assessmentRoundRepository.existsByRoundNameAndPhase_PhaseId(request.getRoundName(), round.getPhase().getPhaseId())) {
+                throw new DuplicateResourceException("Round name already exists in this phase");
+            }
+        }
+
+        assessmentRoundMapper.updateEntityFromDto(request, round);
+        if (request.getPhaseId() != null) {
+            InternshipPhase phase = internshipPhaseRepository.findById(request.getPhaseId())
+                    .orElseThrow(() -> new ResourceNotFoundException("Phase not found with id: " + request.getPhaseId()));
+            round.setPhase(phase);
+        }
+
+        AssessmentRound savedRound = assessmentRoundRepository.save(round);
+
+        if (request.getCriteria() != null) {
+            roundCriterionRepository.deleteAllByRound_RoundId(roundId);
+            
+            for (RoundCriterionRequestDTO criterionRequest : request.getCriteria()) {
+                EvaluationCriterion criterion = evaluationCriterionRepository.findById(criterionRequest.getCriterionId())
+                        .orElseThrow(() -> new ResourceNotFoundException("Evaluation criterion not found with id: " + criterionRequest.getCriterionId()));
+                
+                RoundCriterion roundCriterion = new RoundCriterion();
+                roundCriterion.setRound(savedRound);
+                roundCriterion.setCriterion(criterion);
+                roundCriterion.setWeight(criterionRequest.getWeight());
+                roundCriterionRepository.save(roundCriterion);
+            }
+        }
+
+        return mapToResponseDTO(savedRound);
+    }
+
+    @Override
+    @Transactional
+    public void deleteRound(Integer roundId, User user) {
+        if (user.getRole() != User.Role.ADMIN) {
+            throw new ResourceNotFoundException("Access denied");
+        }
+
+        AssessmentRound round = assessmentRoundRepository.findById(roundId)
+                .orElseThrow(() -> new ResourceNotFoundException("Assessment round not found with id: " + roundId));
+
+        roundCriterionRepository.deleteAllByRound_RoundId(roundId);
+        assessmentRoundRepository.delete(round);
+    }
+}
