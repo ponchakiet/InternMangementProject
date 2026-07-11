@@ -8,6 +8,8 @@ import org.example.internmanagement.entity.User;
 import org.example.internmanagement.exception.DuplicateResourceException;
 import org.example.internmanagement.exception.ResourceNotFoundException;
 import org.example.internmanagement.mapper.UserMapper;
+import org.example.internmanagement.repository.MentorRepository;
+import org.example.internmanagement.repository.StudentRepository;
 import org.example.internmanagement.repository.UserRepository;
 import org.example.internmanagement.service.UserService;
 import org.springframework.security.core.userdetails.UserDetails;
@@ -27,6 +29,8 @@ public class UserServiceImpl implements UserService {
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
     private final UserMapper userMapper;
+    private final StudentRepository studentRepository;
+    private final MentorRepository mentorRepository;
 
     @Override
     public User getCurrentUser(UserDetails userDetails) {
@@ -123,9 +127,19 @@ public class UserServiceImpl implements UserService {
     }
 
     @Override
-    public void deleteUser(Integer userId) {
+    public void deleteUser(Integer userId, User currentUser) {
+        if (currentUser.getUserId().equals(userId)) {
+            throw new IllegalArgumentException("You cannot delete your own account");
+        }
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new ResourceNotFoundException("User not found with id " + userId));
+
+        if (user.getRole() == User.Role.STUDENT) {
+            studentRepository.deleteStudentByUser_UserId(userId);
+        } else if (user.getRole() == User.Role.MENTOR) {
+            mentorRepository.deleteMentorByUser_UserId(userId);
+        }
+
         userRepository.delete(user);
     }
 }

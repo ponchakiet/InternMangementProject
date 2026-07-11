@@ -11,9 +11,8 @@ import java.util.Optional;
 
 @Repository
 public interface AssessmentRoundRepository extends JpaRepository<AssessmentRound, Integer> {
-    Optional<AssessmentRound> findByRoundName(String roundName);
     boolean existsByRoundNameAndPhase_PhaseId(String roundName, Integer phaseId);
     Page<AssessmentRound> findByPhase_PhaseId(Integer phaseId, Pageable pageable);
-    List<AssessmentRound> findByIsActiveTrue();
+    void deleteAllByPhase_PhaseId(Integer phaseId);
 }
 

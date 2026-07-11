@@ -9,5 +9,6 @@ import java.util.Optional;
 @Repository
 public interface MentorRepository extends JpaRepository<Mentor, Integer> {
     Optional<Mentor> findByUser_UserId(Integer userId);
+    void deleteMentorByUser_UserId(Integer userId);
 }
 

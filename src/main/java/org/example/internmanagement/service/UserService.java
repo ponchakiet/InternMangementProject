@@ -20,5 +20,5 @@ public interface UserService {
     UserResponseDTO updateUser(Integer userId, UserUpdateDTO request);
     UserResponseDTO updateStatus(Integer userId, Boolean isActive);
     UserResponseDTO updateRole(Integer userId, User.Role role, User currentUser);
-    void deleteUser(Integer userId);
+    void deleteUser(Integer userId, User currentUser);
 }

@@ -4,12 +4,16 @@ import lombok.RequiredArgsConstructor;
 import org.example.internmanagement.dto.request.InternshipPhaseRequestDTO;
 import org.example.internmanagement.dto.request.InternshipPhaseUpdateDTO;
 import org.example.internmanagement.dto.response.InternshipPhaseResponseDTO;
+import org.example.internmanagement.entity.AssessmentRound;
 import org.example.internmanagement.entity.InternshipPhase;
+import org.example.internmanagement.entity.RoundCriterion;
 import org.example.internmanagement.entity.User;
 import org.example.internmanagement.exception.DuplicateResourceException;
 import org.example.internmanagement.exception.ResourceNotFoundException;
 import org.example.internmanagement.mapper.InternshipPhaseMapper;
+import org.example.internmanagement.repository.AssessmentRoundRepository;
 import org.example.internmanagement.repository.InternshipPhaseRepository;
+import org.example.internmanagement.repository.RoundCriterionRepository;
 import org.example.internmanagement.service.InternshipPhaseService;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -25,6 +29,8 @@ public class InternshipPhaseServiceImpl implements InternshipPhaseService {
 
     private final InternshipPhaseRepository internshipPhaseRepository;
     private final InternshipPhaseMapper internshipPhaseMapper;
+    private final AssessmentRoundRepository assessmentRoundRepository;
+    private final RoundCriterionRepository roundCriterionRepository;
 
     @Override
     public Page<InternshipPhaseResponseDTO> getAllPhases(User user, Pageable pageable) {
@@ -92,6 +98,10 @@ public class InternshipPhaseServiceImpl implements InternshipPhaseService {
 
         InternshipPhase phase = internshipPhaseRepository.findById(phaseId)
                 .orElseThrow(() -> new ResourceNotFoundException("Internship phase not found with id: " + phaseId));
+
+        roundCriterionRepository.deleteAllByRound_Phase_PhaseId(phaseId);
+
+        assessmentRoundRepository.deleteAllByPhase_PhaseId(phaseId);
 
         internshipPhaseRepository.delete(phase);
     }

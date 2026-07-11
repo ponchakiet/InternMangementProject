@@ -174,6 +174,7 @@ public class AssessmentRoundServiceImpl implements AssessmentRoundService {
                 .orElseThrow(() -> new ResourceNotFoundException("Assessment round not found with id: " + roundId));
 
         roundCriterionRepository.deleteAllByRound_RoundId(roundId);
+
         assessmentRoundRepository.delete(round);
     }
 }
